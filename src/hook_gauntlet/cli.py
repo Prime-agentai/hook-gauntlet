@@ -87,6 +87,10 @@ def _resolve_hooks(args: argparse.Namespace, *, case_hooks: list[Hook] | None = 
     return found
 
 
+def _gnu(args: argparse.Namespace) -> bool | None:
+    return {"auto": None, "gnu": True, "bsd": False}[args.coreutils]
+
+
 def _runner(args: argparse.Namespace, hooks: list[Hook]) -> Runner:
     env: dict[str, str] | None = None
     if args.isolate_home:
@@ -281,7 +285,7 @@ def cmd_test(args: argparse.Namespace) -> int:
         failed: list[tuple[str, Outcome]] = []
         tried = 0
         if case.mutate:
-            mutants = mutate(case.call, depth=args.depth)
+            mutants = mutate(case.call, depth=args.depth, gnu=_gnu(args))
             tried = len(mutants)
             for m, mo in zip(mutants, runner.evaluate_all([m.call for m in mutants])):
                 if not expectation_met(case.expect, mo.verdict):
@@ -417,7 +421,7 @@ def cmd_fuzz(args: argparse.Namespace) -> int:
     bypasses: list[tuple[Outcome, str, Outcome]] = []
     tried = 0
     for so in covered:
-        mutants = mutate(so.call, depth=args.depth)
+        mutants = mutate(so.call, depth=args.depth, gnu=_gnu(args))
         tried += len(mutants)
         for m, mo in zip(mutants, runner.evaluate_all([m.call for m in mutants])):
             if mo.verdict.passes:
@@ -538,6 +542,8 @@ def build_parser() -> argparse.ArgumentParser:
     s.add_argument("file", type=Path)
     s.add_argument("--depth", type=int, default=1, help="mutation depth for cases with mutate=true")
     s.add_argument("--show", type=int, default=5, help="failing mutants shown per case")
+    s.add_argument("--coreutils", choices=["auto", "gnu", "bsd"], default="auto",
+                   help="target platform for GNU-only operators (auto: detect this machine)")
     s.add_argument("--junit", type=Path, default=None, help="also write a JUnit XML report")
     s.add_argument("--json", action="store_true")
     _add_hook_args(s)
@@ -560,6 +566,8 @@ def build_parser() -> argparse.ArgumentParser:
     s.add_argument("--pack", action="append", default=[], help=f"built-in seeds: {', '.join(sorted(PACKS))}, all")
     s.add_argument("--depth", type=int, default=1, help="compose up to N operators (default 1)")
     s.add_argument("--show", type=int, default=8, help="bypasses shown per seed")
+    s.add_argument("--coreutils", choices=["auto", "gnu", "bsd"], default="auto",
+                   help="target platform for GNU-only operators (auto: detect this machine)")
     s.add_argument("--strict", action="store_true", help="also fail when a seed is not blocked at all")
     s.add_argument("--json", action="store_true")
     _add_hook_args(s)

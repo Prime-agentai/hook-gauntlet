@@ -15,11 +15,11 @@ from pathlib import Path
 import pytest
 
 from hook_gauntlet.model import ToolCall
-from hook_gauntlet.mutate import BASH_OPERATORS, mutate, mutate_once, operator_names
+from hook_gauntlet.mutate import BASH_OPERATORS, coreutils_is_gnu, mutate, mutate_once, operator_names
 
 
-def _ops(cmd: str) -> dict[str, str]:
-    return {m.op: m.call.tool_input["command"] for m in mutate_once(ToolCall("Bash", {"command": cmd}))}
+def _ops(cmd: str, gnu: bool = True) -> dict[str, str]:
+    return {m.op: m.call.tool_input["command"] for m in mutate_once(ToolCall("Bash", {"command": cmd}), gnu=gnu)}
 
 
 def test_rm_operators() -> None:
@@ -43,10 +43,17 @@ def test_rm_operators() -> None:
 def test_git_operators_and_gating() -> None:
     ops = _ops("git push -f origin main")
     assert ops["git-global-option"] == "git -C . push -f origin main"
-    assert ops["flag-long"] == "git push --force origin main"
+    assert ops["flag-long-git"] == "git push --force origin main"
+    assert _ops("git push -f origin main", gnu=False)["flag-long-git"] == "git push --force origin main"
     assert "flag-case" not in ops and "flags-last" not in ops
     # find is not a getopt tool: never split -name into -n -a -m -e
     assert "flag-split" not in _ops("find . -name x -delete")
+
+
+def test_bsd_coreutils_drop_gnu_only_operators() -> None:
+    bsd = _ops("rm -rf build", gnu=False)
+    assert "flag-long" not in bsd and "flags-last" not in bsd
+    assert bsd["flag-split"] == "rm -r -f build" and bsd["flag-case"] == "rm -Rf build"
 
 
 def test_complex_commands_only_get_wrapper_operators() -> None:
@@ -96,7 +103,7 @@ def test_mutants_are_distinct_and_depth_composes() -> None:
 def test_operator_names_unique() -> None:
     names = operator_names()
     assert len(names) == len(set(names))
-    assert len(BASH_OPERATORS) >= 25
+    assert len(BASH_OPERATORS) >= 26
 
 
 def _snapshot(root: Path) -> list[tuple[str, str]]:
@@ -142,7 +149,7 @@ def test_mutants_are_semantically_equivalent(seed: str, tmp_path: Path) -> None:
     base.mkdir()
     _setup(base)
     expected = _run(seed, base, home)
-    mutants = mutate(ToolCall("Bash", {"command": seed}))
+    mutants = mutate(ToolCall("Bash", {"command": seed}), gnu=coreutils_is_gnu())
     assert mutants
     for i, m in enumerate(mutants):
         work = tmp_path / f"m{i}"

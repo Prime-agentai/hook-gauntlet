@@ -12,9 +12,11 @@ description. We would rather miss a bypass than report a fake one.
 
 from __future__ import annotations
 
+import functools
 import re
 import shlex
 import shutil
+import subprocess
 from collections.abc import Callable
 from dataclasses import dataclass, replace
 
@@ -212,6 +214,14 @@ def op_flag_long(cmd: str) -> str | None:
     return None
 
 
+def op_flag_long_gnu(cmd: str) -> str | None:
+    return None if _program(cmd) == "git" else op_flag_long(cmd)
+
+
+def op_flag_long_git(cmd: str) -> str | None:
+    return op_flag_long(cmd) if _program(cmd) == "git" else None
+
+
 def op_flag_case(cmd: str) -> str | None:
     if not _is_simple(cmd):
         return None
@@ -278,6 +288,17 @@ class Operator:
     name: str
     description: str
     fn: BashOp
+    gnu_only: bool = False  # only meaning-preserving with GNU coreutils (Linux), not BSD (macOS)
+
+
+@functools.lru_cache(maxsize=1)
+def coreutils_is_gnu() -> bool:
+    """True when this machine's ``rm`` is GNU coreutils (long options, argument permutation)."""
+    try:
+        out = subprocess.run(["rm", "--version"], capture_output=True, text=True, timeout=5, check=False)
+    except (OSError, subprocess.SubprocessError):
+        return False
+    return out.returncode == 0 and "GNU" in out.stdout
 
 
 BASH_OPERATORS: tuple[Operator, ...] = (
@@ -299,9 +320,10 @@ BASH_OPERATORS: tuple[Operator, ...] = (
     Operator("double-space", "two spaces between words", op_double_space),
     Operator("flag-split", "`-rf` -> `-r -f` (getopt tools)", op_flag_split),
     Operator("flag-reorder", "`-rf` -> `-fr` (getopt tools)", op_flag_reorder),
-    Operator("flag-long", "`-rf` -> `--recursive --force`", op_flag_long),
+    Operator("flag-long", "`-rf` -> `--recursive --force` (gnu, except git)", op_flag_long_gnu, gnu_only=True),
+    Operator("flag-long-git", "`git push -f` -> `git push --force`", op_flag_long_git),
     Operator("flag-case", "`rm -r` -> `rm -R`", op_flag_case),
-    Operator("flags-last", "options after operands: `rm x -rf` (gnu)", op_flags_last),
+    Operator("flags-last", "options after operands: `rm x -rf` (gnu)", op_flags_last, gnu_only=True),
     Operator("end-of-options", "insert `--` before operands", op_end_of_options),
     Operator("home-var", "`~` -> `$HOME`", op_home_var),
     Operator("path-dot", "`/etc/x` -> `/./etc/x`, `.env` -> `./.env`", op_path_dot),
@@ -335,7 +357,11 @@ def _path_variants(path: str, cwd: str | None) -> list[tuple[str, str]]:
 # --------------------------------------------------------------------------- driver
 
 
-def mutate_once(call: ToolCall, operators: tuple[Operator, ...] = BASH_OPERATORS) -> list[Mutant]:
+def mutate_once(call: ToolCall, operators: tuple[Operator, ...] = BASH_OPERATORS, *, gnu: bool | None = None) -> list[Mutant]:
+    if gnu is None:
+        gnu = coreutils_is_gnu()
+    if not gnu:
+        operators = tuple(o for o in operators if not o.gnu_only)
     seen = {call.key()}
     out: list[Mutant] = []
 
@@ -361,15 +387,18 @@ def mutate_once(call: ToolCall, operators: tuple[Operator, ...] = BASH_OPERATORS
     return out
 
 
-def mutate(call: ToolCall, *, depth: int = 1, limit: int = 500) -> list[Mutant]:
-    """All distinct mutants up to ``depth`` composed operators (``op1+op2``)."""
-    frontier = mutate_once(call)
+def mutate(call: ToolCall, *, depth: int = 1, limit: int = 500, gnu: bool | None = None) -> list[Mutant]:
+    """All distinct mutants up to ``depth`` composed operators (``op1+op2``).
+
+    ``gnu`` selects whether GNU-only operators apply (default: detect this machine's coreutils).
+    """
+    frontier = mutate_once(call, gnu=gnu)
     result = list(frontier)
     seen = {call.key(), *(m.call.key() for m in result)}
     for _ in range(depth - 1):
         nxt: list[Mutant] = []
         for parent in frontier:
-            for child in mutate_once(parent.call):
+            for child in mutate_once(parent.call, gnu=gnu):
                 if child.call.key() in seen:
                     continue
                 seen.add(child.call.key())

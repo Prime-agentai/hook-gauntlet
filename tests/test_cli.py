@@ -83,7 +83,7 @@ def test_fuzz(capsys: pytest.CaptureFixture[str]) -> None:
     rc, out = run(capsys, "fuzz", "--hook", NAIVE, "--seed", "rm -rf build", "--json")
     data = json.loads(out)
     assert rc == 1 and data["covered"] == 1 and data["mutants"] > 15
-    assert {"flag-split", "flag-long", "quote-split"} <= {b["op"] for b in data["bypasses"]}
+    assert {"flag-split", "quote-split", "var-indirection"} <= {b["op"] for b in data["bypasses"]}
 
     rc, out = run(capsys, "fuzz", "--hook", HARDENED, "--pack", "destructive", "--pack", "git")
     assert rc == 0 and "bypasses: 0" in out and "NOT BLOCKED AT ALL" in out

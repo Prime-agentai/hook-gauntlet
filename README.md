@@ -66,7 +66,7 @@ flowchart LR
     C["cases.toml / saved corpus"]
     P["seed packs<br/>(destructive, git, secrets, network)"]
   end
-  P --> M["mutate<br/>30 meaning-preserving operators<br/>composed to --depth N"]
+  P --> M["mutate<br/>31 meaning-preserving operators<br/>composed to --depth N"]
   C --> M
   H --> R
   C --> R
@@ -118,12 +118,14 @@ after fuzz caught two bugs in it: newlines inside quoted `-c` arguments, and `_g
 **Operators.** Bash: `env-prefix`, `command-prefix`, `backslash`, `quote-split`, `abs-path`,
 `var-indirection`, `bash-c`, `sh-c`, `eval`, `chain-prefix`, `semicolon-prefix`, `newline-prefix`,
 `subshell`, `brace-group`, `tab-separator`, `double-space`, `flag-split`, `flag-reorder`,
-`flag-long`, `flag-case`, `flags-last`, `end-of-options`, `home-var`, `path-dot`,
+`flag-long`, `flag-long-git`, `flag-case`, `flags-last`, `end-of-options`, `home-var`, `path-dot`,
 `git-global-option`. File tools: `path-dot-segment`, `path-double-slash`, `path-parent-hop`,
 `path-relative`, `path-absolute`.
 
 **A bypass report is only useful if the mutant really means the same thing.** Flag operators only
-apply to getopt-style programs (`find -name` is never split into `-n -a -m -e`). The test suite
+apply to getopt-style programs (`find -name` is never split into `-n -a -m -e`). `flag-long` and
+`flags-last` hold only for GNU coreutils, so they are switched off automatically on BSD/macOS
+(`--coreutils auto|gnu|bsd` sets the target platform explicitly). The test suite
 also checks this empirically: it runs seeds and all their mutants with real bash in throwaway
 directories and asserts the same stdout and the same filesystem result
 ([`tests/test_mutate.py`](tests/test_mutate.py)).
@@ -257,7 +259,7 @@ Implemented from the [hooks reference](https://code.claude.com/docs/en/hooks):
 
 * Command hooks only. `http`, `prompt`, `agent` and `mcp_tool` handlers are listed by `gauntlet hooks` but not executed.
 * `PreToolUse` only for now. `PostToolUse` and `UserPromptSubmit` payloads are on the roadmap.
-* Some mutation operators assume bash plus GNU coreutils (`flags-last` relies on GNU argument permutation). Each operator's description says what it relies on.
+* Mutants assume bash as the shell. GNU-only operators follow `--coreutils`, which is detected from this machine by default, so set it when the hook will run on a different platform.
 * A fuzz run with 0 bypasses means none were found by these operators at this depth. It does not prove the hook is sound. Command substitution, `xargs`, interpreters (`python -c "shutil.rmtree(...)"`) and aliases are outside what a string-level hook can see.
 
 ## Roadmap
