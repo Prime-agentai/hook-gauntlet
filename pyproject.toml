@@ -1,0 +1,48 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "hook-gauntlet"
+version = "0.1.0"
+description = "Test Claude Code hooks against your real tool-call history, meaning-preserving bypass mutations, and their own previous version."
+readme = "README.md"
+license = { text = "MIT" }
+requires-python = ">=3.11"
+authors = [{ name = "Prime-agentai" }]
+keywords = ["claude-code", "hooks", "guardrails", "ai-agents", "fuzzing", "testing", "security", "pretooluse", "agent-safety"]
+classifiers = [
+  "Development Status :: 3 - Alpha",
+  "Environment :: Console",
+  "Intended Audience :: Developers",
+  "License :: OSI Approved :: MIT License",
+  "Operating System :: POSIX",
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3.11",
+  "Programming Language :: Python :: 3.12",
+  "Programming Language :: Python :: 3.13",
+  "Topic :: Security",
+  "Topic :: Software Development :: Testing",
+  "Typing :: Typed",
+]
+dependencies = []
+
+[project.optional-dependencies]
+dev = ["pytest>=7", "mypy>=1.8"]
+
+[project.scripts]
+gauntlet = "hook_gauntlet.cli:main"
+hook-gauntlet = "hook_gauntlet.cli:main"
+
+[project.urls]
+Homepage = "https://github.com/Prime-agentai/hook-gauntlet"
+Issues = "https://github.com/Prime-agentai/hook-gauntlet/issues"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-data]
+hook_gauntlet = ["py.typed"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

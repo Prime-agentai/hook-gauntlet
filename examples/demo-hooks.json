@@ -1,0 +1,19 @@
+{
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Bash|Read|Write|Edit|MultiEdit",
+        "hooks": [
+          { "type": "command", "command": "python3 examples/hooks/hardened_guard.py", "timeout": 10 }
+        ]
+      },
+      {
+        "matcher": "Bash",
+        "hooks": [
+          { "type": "command", "if": "Bash(git *)", "command": "python3 examples/hooks/naive_guard.py" },
+          { "type": "prompt", "prompt": "Is this command safe?" }
+        ]
+      }
+    ]
+  }
+}
